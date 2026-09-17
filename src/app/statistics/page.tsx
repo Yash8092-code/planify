@@ -1,6 +1,7 @@
 "use client";
 
 import React from "react";
+import Link from "next/link";
 import useSWR from "swr";
 import { motion } from "framer-motion";
 import {
@@ -12,6 +13,7 @@ import {
   Award,
   Zap,
   Target,
+  ArrowLeft,
 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
@@ -54,7 +56,18 @@ export default function StatisticsPage() {
   );
 
   return (
-    <div className="space-y-8">
+    <div className="space-y-6 sm:space-y-8">
+      {/* Back Navigation Bar */}
+      <div>
+        <Link
+          href="/dashboard"
+          className="inline-flex items-center gap-1.5 text-xs font-medium text-muted-foreground hover:text-foreground bg-secondary/50 hover:bg-secondary/80 px-3 py-1.5 rounded-lg transition-colors border border-border/40 shadow-2xs"
+        >
+          <ArrowLeft className="h-3.5 w-3.5" />
+          <span>Back to Dashboard</span>
+        </Link>
+      </div>
+
       {/* Page Title */}
       <div>
         <h1 className="text-2xl md:text-3xl font-bold tracking-tight">Productivity Analytics</h1>

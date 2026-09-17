@@ -4,6 +4,7 @@ import React, { useState, useEffect } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import { Sidebar } from "./sidebar";
 import { MobileNav } from "./mobile-nav";
+import { MobileHeader } from "./mobile-header";
 import { useProfile } from "@/hooks/use-profile";
 import { useRealtime } from "@/hooks/use-realtime";
 import { cn } from "@/lib/utils";
@@ -65,16 +66,19 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   return (
     <div className="min-h-screen bg-background">
       <Sidebar collapsed={collapsed} onToggle={toggleCollapse} />
-      <main
+      <div
         className={cn(
-          "transition-all duration-300 ease-in-out min-h-screen pb-20 md:pb-0",
+          "transition-all duration-300 ease-in-out min-h-screen flex flex-col",
           collapsed ? "md:ml-[68px]" : "md:ml-[240px]"
         )}
       >
-        <div className="page-enter max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
-          {children}
-        </div>
-      </main>
+        <MobileHeader />
+        <main className="flex-1 pb-24 md:pb-0">
+          <div className="page-enter max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
+            {children}
+          </div>
+        </main>
+      </div>
       <MobileNav />
     </div>
   );
