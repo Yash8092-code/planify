@@ -36,7 +36,7 @@ export async function GET(
       );
     }
 
-    if (doc.profile_id && doc.profile_id !== user.id) {
+    if (doc.profile_id !== user.id) {
       return NextResponse.json(
         { error: "Access denied." },
         { status: 403 }

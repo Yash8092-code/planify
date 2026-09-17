@@ -18,7 +18,7 @@ export async function GET(request: Request) {
     let dbQuery = admin
       .from("documents")
       .select("id, profile_id, file_name, file_url, file_path, file_type, file_size, created_at, updated_at")
-      .or(`profile_id.eq.${user.id},profile_id.is.null`);
+      .eq("profile_id", user.id);
 
     if (sort === "name") {
       dbQuery = dbQuery.order("file_name", { ascending: true });

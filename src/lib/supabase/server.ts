@@ -66,27 +66,11 @@ export async function getAuthenticatedUser(): Promise<User | null> {
       error,
     } = await supabase.auth.getUser();
 
-    if (!error && user) {
-      return user;
+    if (error || !user) {
+      return null;
     }
 
-    // Continuity fallback: If session cookie is not yet initialized or was cleared,
-    // and there is a single workspace profile in the database, return that user identity
-    // so documents, tasks, and notes remain accessible.
-    const admin = createAdminClient();
-    const { data: profiles } = await admin.from("profiles").select("id, email, name").limit(2);
-    if (profiles && profiles.length === 1) {
-      return {
-        id: profiles[0].id,
-        email: profiles[0].email,
-        app_metadata: {},
-        user_metadata: { name: profiles[0].name },
-        aud: "authenticated",
-        created_at: new Date().toISOString(),
-      } as User;
-    }
-
-    return null;
+    return user;
   } catch (err) {
     console.error("getAuthenticatedUser error:", err);
     return null;

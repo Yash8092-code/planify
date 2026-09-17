@@ -100,7 +100,7 @@ export default function OnboardingPage() {
       await supabase.auth.refreshSession();
 
       toast.success(isExistingUser ? "Workspace synced! 🎉" : "Welcome to Planify! 🎉");
-      router.replace("/dashboard");
+      window.location.href = "/dashboard";
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Verification failed");
     } finally {

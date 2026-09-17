@@ -1,9 +1,10 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { Sidebar } from "./sidebar";
 import { MobileNav } from "./mobile-nav";
+import { useProfile } from "@/hooks/use-profile";
 import { useRealtime } from "@/hooks/use-realtime";
 import { cn } from "@/lib/utils";
 
@@ -11,7 +12,10 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const [collapsed, setCollapsed] = useState(false);
   const pathname = usePathname();
 
-  // Connect Supabase Realtime synchronization
+  const router = useRouter();
+  const { profile, isLoading: isProfileLoading, hasProfile } = useProfile();
+
+  // Connect Supabase Realtime synchronization only when user is authenticated
   useRealtime();
 
   // Load saved collapse state
@@ -28,10 +32,34 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     });
   };
 
-  // Don't show nav on onboarding page
+  // Don't show nav on onboarding or root page
   const isOnboarding = pathname === "/" || pathname === "/onboarding";
+
+  useEffect(() => {
+    if (!isOnboarding && !isProfileLoading && !hasProfile) {
+      router.replace("/onboarding");
+    }
+  }, [isOnboarding, isProfileLoading, hasProfile, router]);
+
   if (isOnboarding) {
     return <>{children}</>;
+  }
+
+  // Show clean loading state while verifying user identity
+  if (isProfileLoading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-background">
+        <div className="flex flex-col items-center gap-3">
+          <div className="h-8 w-8 border-2 border-primary/30 border-t-primary rounded-full animate-spin" />
+          <p className="text-xs text-muted-foreground">Loading workspace...</p>
+        </div>
+      </div>
+    );
+  }
+
+  // If not authenticated, do not render workspace
+  if (!hasProfile) {
+    return null;
   }
 
   return (
