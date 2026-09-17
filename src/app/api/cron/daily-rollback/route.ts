@@ -1,10 +1,10 @@
 import { NextResponse } from "next/server";
-import { createServerClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/server";
 
-function getTodayDateString(timezone = "UTC"): string {
+function getTodayDateString(timezone = "Asia/Kolkata"): string {
   try {
     const formatter = new Intl.DateTimeFormat("en-CA", {
-      timeZone: timezone,
+      timeZone: timezone || "Asia/Kolkata",
       year: "numeric",
       month: "2-digit",
       day: "2-digit",
@@ -35,10 +35,10 @@ async function handleRollbackCron(request: Request) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const supabase = createServerClient();
+    const admin = createAdminClient();
 
     // Fetch all profiles
-    const { data: profiles, error: pError } = await supabase
+    const { data: profiles, error: pError } = await admin
       .from("profiles")
       .select("id, timezone");
 
@@ -47,53 +47,66 @@ async function handleRollbackCron(request: Request) {
     }
 
     let totalCreated = 0;
+    let profilesProcessed = 0;
 
     for (const profile of profiles) {
-      const today = getTodayDateString(profile.timezone);
+      try {
+        const timezone = profile.timezone || "Asia/Kolkata";
+        const today = getTodayDateString(timezone);
 
-      // Get active recurring tasks
-      const { data: recurring } = await supabase
-        .from("recurring_tasks")
-        .select("*")
-        .eq("profile_id", profile.id)
-        .eq("active", true);
+        // Get active recurring tasks
+        const { data: recurring, error: recErr } = await admin
+          .from("recurring_tasks")
+          .select("*")
+          .eq("profile_id", profile.id)
+          .eq("active", true);
 
-      if (!recurring || recurring.length === 0) continue;
+        if (recErr || !recurring || recurring.length === 0) continue;
 
-      // Get existing tasks for today
-      const { data: existing } = await supabase
-        .from("tasks")
-        .select("recurring_task_id")
-        .eq("profile_id", profile.id)
-        .eq("task_date", today);
+        // Get existing tasks for today
+        const { data: existing } = await admin
+          .from("tasks")
+          .select("recurring_task_id")
+          .eq("profile_id", profile.id)
+          .eq("task_date", today);
 
-      const existingIds = new Set(
-        (existing || []).map((t) => t.recurring_task_id).filter(Boolean)
-      );
+        const existingIds = new Set(
+          (existing || []).map((t) => t.recurring_task_id).filter(Boolean)
+        );
 
-      const toInsert = recurring
-        .filter((r) => !existingIds.has(r.id))
-        .map((r, i) => ({
-          profile_id: profile.id,
-          title: r.title,
-          description: r.description,
-          priority: r.priority,
-          due_time: r.due_time,
-          completed: false,
-          rollback_daily: true,
-          recurring_task_id: r.id,
-          task_date: today,
-          sort_order: i,
-        }));
+        const toInsert = recurring
+          .filter((r) => !existingIds.has(r.id))
+          .map((r, i) => ({
+            profile_id: profile.id,
+            title: r.title,
+            description: r.description,
+            priority: r.priority,
+            due_time: r.due_time,
+            completed: false,
+            rollback_daily: true,
+            recurring_task_id: r.id,
+            task_date: today,
+            sort_order: i,
+          }));
 
-      if (toInsert.length > 0) {
-        await supabase.from("tasks").insert(toInsert);
-        totalCreated += toInsert.length;
+        if (toInsert.length > 0) {
+          const { error: insertErr } = await admin.from("tasks").insert(toInsert);
+          if (!insertErr) {
+            totalCreated += toInsert.length;
+          } else {
+            console.error(`Error creating recurring tasks for profile ${profile.id}:`, insertErr.message);
+          }
+        }
+
+        profilesProcessed++;
+      } catch (profileErr) {
+        console.error(`Error processing rollback for profile ${profile.id}:`, profileErr);
       }
     }
 
     return NextResponse.json({
       success: true,
+      profilesProcessed,
       totalCreated,
       timestamp: new Date().toISOString(),
     });

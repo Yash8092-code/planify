@@ -17,6 +17,7 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
+import { SyncIndicator } from "./sync-indicator";
 
 const NAV_ITEMS = [
   { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
@@ -96,8 +97,9 @@ export function Sidebar({ collapsed, onToggle }: SidebarProps) {
         })}
       </nav>
 
-      {/* Collapse Toggle */}
-      <div className="p-2 border-t border-sidebar-border">
+      {/* Sync Status & Collapse Toggle */}
+      <div className="p-2 border-t border-sidebar-border space-y-1.5">
+        <SyncIndicator collapsed={collapsed} />
         <Button
           variant="ghost"
           size={collapsed ? "icon" : "default"}

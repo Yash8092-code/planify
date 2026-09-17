@@ -1,34 +1,36 @@
 import { NextResponse } from "next/server";
-import { createServerClient } from "@/lib/supabase/server";
+import { createServerClient, createAdminClient, getAuthenticatedUser } from "@/lib/supabase/server";
 import { sendWelcomeEmail } from "@/lib/email";
 import { Profile } from "@/lib/types";
 
-// GET /api/profile — Fetch the single user profile
+// GET /api/profile — Fetch current authenticated user profile
 export async function GET() {
   try {
-    const supabase = createServerClient();
-    const { data, error } = await supabase
+    const user = await getAuthenticatedUser();
+
+    if (!user) {
+      return NextResponse.json({ data: null }, { status: 200 });
+    }
+
+    const admin = createAdminClient();
+    const { data: profile, error } = await admin
       .from("profiles")
       .select("*")
-      .limit(1)
-      .single();
+      .eq("id", user.id)
+      .maybeSingle();
 
     if (error) {
-      // PGRST116 = no rows found — means no profile yet
-      if (error.code === "PGRST116") {
-        return NextResponse.json({ data: null }, { status: 200 });
-      }
       return NextResponse.json({ error: error.message }, { status: 500 });
     }
 
-    return NextResponse.json({ data });
+    return NextResponse.json({ data: profile });
   } catch (err) {
     console.error("Profile GET error:", err);
     return NextResponse.json({ error: "Internal server error" }, { status: 500 });
   }
 }
 
-// POST /api/profile — Create user profile (first-time onboarding)
+// POST /api/profile — Create user profile
 export async function POST(request: Request) {
   try {
     const body = await request.json();
@@ -42,14 +44,47 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Valid email is required" }, { status: 400 });
     }
 
-    const supabase = createServerClient();
+    const cleanEmail = email.trim().toLowerCase();
+    const user = await getAuthenticatedUser();
+    const admin = createAdminClient();
 
-    // Check if profile already exists
-    const { data: existing } = await supabase
+    let targetUserId = user?.id;
+
+    // If no session exists yet, create auth user
+    if (!targetUserId) {
+      const { data: authUser, error: authError } = await admin.auth.admin.createUser({
+        email: cleanEmail,
+        email_confirm: true,
+        user_metadata: { name: name.trim() },
+      });
+
+      if (authError && !authError.message.includes("already registered")) {
+        return NextResponse.json({ error: authError.message }, { status: 400 });
+      }
+
+      targetUserId = authUser?.user?.id;
+
+      if (!targetUserId) {
+        // Look up by email
+        const { data: existingProf } = await admin
+          .from("profiles")
+          .select("id")
+          .eq("email", cleanEmail)
+          .maybeSingle();
+        targetUserId = existingProf?.id;
+      }
+    }
+
+    if (!targetUserId) {
+      return NextResponse.json({ error: "Unable to establish user identity" }, { status: 500 });
+    }
+
+    // Check if profile already exists for this ID
+    const { data: existing } = await admin
       .from("profiles")
       .select("id")
-      .limit(1)
-      .single();
+      .eq("id", targetUserId)
+      .maybeSingle();
 
     if (existing) {
       return NextResponse.json(
@@ -58,12 +93,13 @@ export async function POST(request: Request) {
       );
     }
 
-    const { data, error } = await supabase
+    const { data, error } = await admin
       .from("profiles")
       .insert({
+        id: targetUserId,
         name: name.trim(),
-        email: email.trim().toLowerCase(),
-        timezone: timezone || "UTC",
+        email: cleanEmail,
+        timezone: timezone || "Asia/Kolkata",
         email_notifications: true,
         theme: "system",
       })
@@ -86,24 +122,28 @@ export async function POST(request: Request) {
   }
 }
 
-// PATCH /api/profile — Update user profile
+// PATCH /api/profile — Update current authenticated user profile
 export async function PATCH(request: Request) {
   try {
-    const body = await request.json();
-    const supabase = createServerClient();
+    const user = await getAuthenticatedUser();
+    if (!user) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
 
-    // Get existing profile
-    const { data: existing, error: fetchError } = await supabase
+    const body = await request.json();
+    const admin = createAdminClient();
+
+    // Verify profile belongs to authenticated user
+    const { data: existing, error: fetchError } = await admin
       .from("profiles")
       .select("id")
-      .limit(1)
-      .single();
+      .eq("id", user.id)
+      .maybeSingle();
 
     if (fetchError || !existing) {
       return NextResponse.json({ error: "Profile not found" }, { status: 404 });
     }
 
-    // Build update object — only include provided fields
     const updates: Record<string, unknown> = { updated_at: new Date().toISOString() };
 
     if (body.name !== undefined) {
@@ -118,14 +158,14 @@ export async function PATCH(request: Request) {
       }
       updates.email = body.email.trim().toLowerCase();
     }
-    if (body.timezone !== undefined) updates.timezone = body.timezone;
+    if (body.timezone !== undefined) updates.timezone = body.timezone || "Asia/Kolkata";
     if (body.email_notifications !== undefined) updates.email_notifications = body.email_notifications;
     if (body.theme !== undefined) updates.theme = body.theme;
 
-    const { data, error } = await supabase
+    const { data, error } = await admin
       .from("profiles")
       .update(updates)
-      .eq("id", existing.id)
+      .eq("id", user.id)
       .select()
       .single();
 
@@ -140,30 +180,29 @@ export async function PATCH(request: Request) {
   }
 }
 
-// DELETE /api/profile — Reset profile (with cascade deletes via DB)
+// DELETE /api/profile — Delete current user profile & data
 export async function DELETE() {
   try {
-    const supabase = createServerClient();
-
-    const { data: existing, error: fetchError } = await supabase
-      .from("profiles")
-      .select("id")
-      .limit(1)
-      .single();
-
-    if (fetchError || !existing) {
-      return NextResponse.json({ error: "Profile not found" }, { status: 404 });
+    const user = await getAuthenticatedUser();
+    if (!user) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    // Delete profile (cascade will remove tasks, notes, documents, etc.)
-    const { error } = await supabase
+    const admin = createAdminClient();
+
+    // Delete profile (cascades to tasks, notes, documents, etc. in DB)
+    const { error } = await admin
       .from("profiles")
       .delete()
-      .eq("id", existing.id);
+      .eq("id", user.id);
 
     if (error) {
       return NextResponse.json({ error: error.message }, { status: 500 });
     }
+
+    // Sign out user session
+    const supabase = await createServerClient();
+    await supabase.auth.signOut();
 
     return NextResponse.json({ data: { success: true } });
   } catch (err) {

@@ -1,10 +1,10 @@
 import { NextResponse } from "next/server";
-import { createServerClient } from "@/lib/supabase/server";
+import { createAdminClient, getAuthenticatedUser } from "@/lib/supabase/server";
 
-function getTodayDateString(timezone = "UTC"): string {
+function getTodayDateString(timezone = "Asia/Kolkata"): string {
   try {
     const formatter = new Intl.DateTimeFormat("en-CA", {
-      timeZone: timezone,
+      timeZone: timezone || "Asia/Kolkata",
       year: "numeric",
       month: "2-digit",
       day: "2-digit",
@@ -15,25 +15,19 @@ function getTodayDateString(timezone = "UTC"): string {
   }
 }
 
-// GET /api/rollback — List all recurring tasks
+// GET /api/rollback — List all recurring tasks for authenticated user
 export async function GET() {
   try {
-    const supabase = createServerClient();
-
-    const { data: profile, error: profileError } = await supabase
-      .from("profiles")
-      .select("id")
-      .limit(1)
-      .single();
-
-    if (profileError || !profile) {
-      return NextResponse.json({ error: "Profile not found" }, { status: 404 });
+    const user = await getAuthenticatedUser();
+    if (!user) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const { data, error } = await supabase
+    const admin = createAdminClient();
+    const { data, error } = await admin
       .from("recurring_tasks")
       .select("*")
-      .eq("profile_id", profile.id)
+      .eq("profile_id", user.id)
       .order("created_at", { ascending: false });
 
     if (error) {
@@ -47,28 +41,29 @@ export async function GET() {
   }
 }
 
-// POST /api/rollback — Manually trigger rollback for today
+// POST /api/rollback — Manually trigger rollback for today for authenticated user
 export async function POST() {
   try {
-    const supabase = createServerClient();
-
-    const { data: profile, error: profileError } = await supabase
-      .from("profiles")
-      .select("id, timezone")
-      .limit(1)
-      .single();
-
-    if (profileError || !profile) {
-      return NextResponse.json({ error: "Profile not found" }, { status: 404 });
+    const user = await getAuthenticatedUser();
+    if (!user) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const today = getTodayDateString(profile.timezone);
+    const admin = createAdminClient();
+
+    const { data: profile } = await admin
+      .from("profiles")
+      .select("timezone")
+      .eq("id", user.id)
+      .maybeSingle();
+
+    const today = getTodayDateString(profile?.timezone || "Asia/Kolkata");
 
     // 1. Get active recurring tasks
-    const { data: activeRecurring, error: recError } = await supabase
+    const { data: activeRecurring, error: recError } = await admin
       .from("recurring_tasks")
       .select("*")
-      .eq("profile_id", profile.id)
+      .eq("profile_id", user.id)
       .eq("active", true);
 
     if (recError) {
@@ -83,10 +78,10 @@ export async function POST() {
     }
 
     // 2. Check which ones already exist for today
-    const { data: existingTasks } = await supabase
+    const { data: existingTasks } = await admin
       .from("tasks")
       .select("recurring_task_id")
-      .eq("profile_id", profile.id)
+      .eq("profile_id", user.id)
       .eq("task_date", today);
 
     const existingIds = new Set(
@@ -96,7 +91,7 @@ export async function POST() {
     const toInsert = activeRecurring
       .filter((rec) => !existingIds.has(rec.id))
       .map((rec, index) => ({
-        profile_id: profile.id,
+        profile_id: user.id,
         title: rec.title,
         description: rec.description,
         priority: rec.priority,
@@ -109,7 +104,7 @@ export async function POST() {
       }));
 
     if (toInsert.length > 0) {
-      const { error: insertError } = await supabase
+      const { error: insertError } = await admin
         .from("tasks")
         .insert(toInsert);
 
@@ -129,9 +124,14 @@ export async function POST() {
   }
 }
 
-// PATCH /api/rollback — Update a recurring task (toggle active, change details)
+// PATCH /api/rollback — Update a recurring task template
 export async function PATCH(request: Request) {
   try {
+    const user = await getAuthenticatedUser();
+    if (!user) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
     const body = await request.json();
     const { id, active, title, description, priority, due_time } = body;
 
@@ -139,7 +139,7 @@ export async function PATCH(request: Request) {
       return NextResponse.json({ error: "Recurring task ID is required" }, { status: 400 });
     }
 
-    const supabase = createServerClient();
+    const admin = createAdminClient();
 
     const updates: Record<string, unknown> = {
       updated_at: new Date().toISOString(),
@@ -151,10 +151,11 @@ export async function PATCH(request: Request) {
     if (priority !== undefined) updates.priority = priority;
     if (due_time !== undefined) updates.due_time = due_time || null;
 
-    const { data, error } = await supabase
+    const { data, error } = await admin
       .from("recurring_tasks")
       .update(updates)
       .eq("id", id)
+      .eq("profile_id", user.id)
       .select()
       .single();
 
@@ -172,6 +173,11 @@ export async function PATCH(request: Request) {
 // DELETE /api/rollback — Delete a recurring task template
 export async function DELETE(request: Request) {
   try {
+    const user = await getAuthenticatedUser();
+    if (!user) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
     const { searchParams } = new URL(request.url);
     const id = searchParams.get("id");
 
@@ -179,12 +185,13 @@ export async function DELETE(request: Request) {
       return NextResponse.json({ error: "Recurring task ID is required" }, { status: 400 });
     }
 
-    const supabase = createServerClient();
+    const admin = createAdminClient();
 
-    const { error } = await supabase
+    const { error } = await admin
       .from("recurring_tasks")
       .delete()
-      .eq("id", id);
+      .eq("id", id)
+      .eq("profile_id", user.id);
 
     if (error) {
       return NextResponse.json({ error: error.message }, { status: 500 });

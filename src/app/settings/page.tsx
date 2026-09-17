@@ -59,7 +59,7 @@ export default function SettingsPage() {
   // Profile form state
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
-  const [timezone, setTimezone] = useState("UTC");
+  const [timezone, setTimezone] = useState("Asia/Kolkata");
   const [emailNotifications, setEmailNotifications] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
 
@@ -75,7 +75,7 @@ export default function SettingsPage() {
     if (profile) {
       setName(profile.name || "");
       setEmail(profile.email || "");
-      setTimezone(profile.timezone || "UTC");
+      setTimezone(profile.timezone || "Asia/Kolkata");
       setEmailNotifications(profile.email_notifications ?? true);
     }
   }, [profile]);

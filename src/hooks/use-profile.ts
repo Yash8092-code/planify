@@ -15,10 +15,20 @@ export function useProfile() {
     "/api/profile",
     fetcher,
     {
-      revalidateOnFocus: false,
-      dedupingInterval: 30000,
+      revalidateOnFocus: true,
+      dedupingInterval: 10000,
     }
   );
+
+  const signOut = async () => {
+    try {
+      await fetch("/api/auth/signout", { method: "POST" });
+      mutate(null, false);
+      window.location.href = "/onboarding";
+    } catch (err) {
+      console.error("Signout error:", err);
+    }
+  };
 
   return {
     profile: data ?? null,
@@ -27,5 +37,6 @@ export function useProfile() {
     error,
     hasProfile: data !== null && data !== undefined,
     mutate,
+    signOut,
   };
 }

@@ -1,11 +1,11 @@
 import { NextResponse } from "next/server";
-import { createServerClient } from "@/lib/supabase/server";
+import { createAdminClient, getAuthenticatedUser } from "@/lib/supabase/server";
 import { sendCompletionEmail } from "@/lib/email";
 
-function getTodayDateString(timezone = "UTC"): string {
+function getTodayDateString(timezone = "Asia/Kolkata"): string {
   try {
     const formatter = new Intl.DateTimeFormat("en-CA", {
-      timeZone: timezone,
+      timeZone: timezone || "Asia/Kolkata",
       year: "numeric",
       month: "2-digit",
       day: "2-digit",
@@ -16,16 +16,21 @@ function getTodayDateString(timezone = "UTC"): string {
   }
 }
 
-// POST /api/notifications/completion — Trigger completion celebration email
+// POST /api/notifications/completion — Trigger completion celebration email for authenticated user
 export async function POST() {
   try {
-    const supabase = createServerClient();
+    const user = await getAuthenticatedUser();
+    if (!user) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
 
-    const { data: profile, error: pError } = await supabase
+    const admin = createAdminClient();
+
+    const { data: profile, error: pError } = await admin
       .from("profiles")
       .select("*")
-      .limit(1)
-      .single();
+      .eq("id", user.id)
+      .maybeSingle();
 
     if (pError || !profile) {
       return NextResponse.json({ error: "Profile not found" }, { status: 404 });
@@ -35,26 +40,26 @@ export async function POST() {
       return NextResponse.json({ message: "Email notifications disabled" });
     }
 
-    const today = getTodayDateString(profile.timezone);
+    const today = getTodayDateString(profile.timezone || "Asia/Kolkata");
 
     // 1. Check if completion email was already sent today
-    const { data: existingLog } = await supabase
+    const { data: existingLog } = await admin
       .from("notification_logs")
       .select("id")
-      .eq("profile_id", profile.id)
+      .eq("profile_id", user.id)
       .eq("notification_type", "completion_email")
       .eq("notification_date", today)
-      .single();
+      .maybeSingle();
 
     if (existingLog) {
       return NextResponse.json({ message: "Completion email already sent today" });
     }
 
     // 2. Fetch today's tasks to verify completion
-    const { data: tasks, error: tError } = await supabase
+    const { data: tasks, error: tError } = await admin
       .from("tasks")
       .select("*")
-      .eq("profile_id", profile.id)
+      .eq("profile_id", user.id)
       .eq("task_date", today);
 
     if (tError || !tasks || tasks.length === 0) {
@@ -70,11 +75,13 @@ export async function POST() {
     const sent = await sendCompletionEmail(profile, tasks);
 
     if (sent) {
-      await supabase.from("notification_logs").insert({
-        profile_id: profile.id,
+      await admin.from("notification_logs").insert({
+        profile_id: user.id,
         notification_type: "completion_email",
         notification_date: today,
+        sent_at: new Date().toISOString(),
       });
+      console.log(`Completion celebration email dispatched to ${profile.email}`);
     }
 
     return NextResponse.json({ success: true, sent });

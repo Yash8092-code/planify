@@ -1,9 +1,14 @@
 import { NextResponse } from "next/server";
-import { createServerClient } from "@/lib/supabase/server";
+import { createAdminClient, getAuthenticatedUser } from "@/lib/supabase/server";
 
-// PATCH /api/tasks/reorder — Batch update sort order for tasks
+// PATCH /api/tasks/reorder — Batch update sort order for tasks belonging to user
 export async function PATCH(request: Request) {
   try {
+    const user = await getAuthenticatedUser();
+    if (!user) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
     const body = await request.json();
     const { taskIds } = body;
 
@@ -14,14 +19,15 @@ export async function PATCH(request: Request) {
       );
     }
 
-    const supabase = createServerClient();
+    const admin = createAdminClient();
 
-    // Update each task's sort_order sequentially or in parallel promises
+    // Update each task's sort_order sequentially or in parallel promises, verifying ownership
     const updatePromises = taskIds.map((id, index) =>
-      supabase
+      admin
         .from("tasks")
         .update({ sort_order: index, updated_at: new Date().toISOString() })
         .eq("id", id)
+        .eq("profile_id", user.id)
     );
 
     const results = await Promise.all(updatePromises);

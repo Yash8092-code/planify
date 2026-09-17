@@ -89,10 +89,14 @@ export function useTasks(options?: {
         throw new Error(json.error || "Failed to update task");
       }
 
+      if (newStatus) {
+        toast.success("Task completed successfully.");
+      }
+
       await mutate();
       return true;
     } catch (err) {
-      toast.error("Failed to update task status");
+      toast.error("Failed to update task. Changes rolled back.");
       await mutate();
       return false;
     }

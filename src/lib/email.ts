@@ -8,6 +8,9 @@ const resend = process.env.RESEND_API_KEY ? new Resend(process.env.RESEND_API_KE
 // The sender address — in dev mode Resend allows onboarding@resend.dev
 const FROM_EMAIL = process.env.EMAIL_FROM || process.env.RESEND_FROM_EMAIL || "Planify <onboarding@resend.dev>";
 
+// Dynamic app URL
+const APP_URL = process.env.NEXT_PUBLIC_APP_URL || "https://planify-murex-xi.vercel.app";
+
 /** Generate HTML email template for Morning Daily Checklist */
 export function generateMorningEmailHtml(profile: Profile, tasks: Task[]): string {
   const quote = getDailyQuote();
@@ -79,7 +82,7 @@ export function generateMorningEmailHtml(profile: Profile, tasks: Task[]): strin
 
           <!-- Button -->
           <div style="text-align: center; margin-top: 32px;">
-            <a href="http://localhost:3000/dashboard" style="display: inline-block; background: #7c3aed; color: #ffffff; text-decoration: none; padding: 12px 28px; border-radius: 8px; font-size: 14px; font-weight: 600;">
+            <a href="${APP_URL}/dashboard" style="display: inline-block; background: #7c3aed; color: #ffffff; text-decoration: none; padding: 12px 28px; border-radius: 8px; font-size: 14px; font-weight: 600;">
               Open Planify Dashboard &rarr;
             </a>
           </div>
@@ -127,7 +130,7 @@ export function generateCompletionEmailHtml(profile: Profile, tasks: Task[]): st
           </div>
 
           <div>
-            <a href="http://localhost:3000/statistics" style="display: inline-block; background: #10b981; color: #ffffff; text-decoration: none; padding: 12px 28px; border-radius: 8px; font-size: 14px; font-weight: 600;">
+            <a href="${APP_URL}/statistics" style="display: inline-block; background: #10b981; color: #ffffff; text-decoration: none; padding: 12px 28px; border-radius: 8px; font-size: 14px; font-weight: 600;">
               View Your Productivity Stats &rarr;
             </a>
           </div>
@@ -271,6 +274,76 @@ export async function sendWelcomeEmail(profile: Profile): Promise<boolean> {
     return true;
   } catch (err) {
     console.error("Failed to send welcome email:", err);
+    return false;
+  }
+}
+
+/** Generate HTML email template for 4-Digit OTP Verification */
+export function generateOtpEmailHtml(otp: string): string {
+  return `
+  <!DOCTYPE html>
+  <html>
+    <head>
+      <meta charset="utf-8">
+      <title>Your Planify Verification Code</title>
+    </head>
+    <body style="margin: 0; padding: 24px; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; background-color: #f9fafb;">
+      <div style="max-width: 500px; margin: 0 auto; background: #ffffff; border-radius: 16px; overflow: hidden; border: 1px solid #e5e7eb; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05);">
+        
+        <!-- Header -->
+        <div style="background: linear-gradient(135deg, #7c3aed 0%, #4f46e5 100%); padding: 28px 24px; color: #ffffff; text-align: center;">
+          <h1 style="margin: 0; font-size: 22px; font-weight: 800; letter-spacing: -0.025em;">Planify</h1>
+          <p style="margin: 4px 0 0 0; font-size: 13px; opacity: 0.9;">Device & Account Verification</p>
+        </div>
+
+        <!-- Body -->
+        <div style="padding: 28px 24px; text-align: center;">
+          <h2 style="margin: 0 0 8px 0; font-size: 18px; color: #111827;">Your 4-Digit Verification Code</h2>
+          <p style="margin: 0 0 24px 0; font-size: 14px; color: #4b5563; line-height: 1.5;">
+            Enter the 4-digit code below to securely verify your account and sync your Planify workspace:
+          </p>
+
+          <!-- 4-Digit OTP Code Display -->
+          <div style="display: inline-block; background: #f5f3ff; border: 2px dashed #7c3aed; border-radius: 14px; padding: 18px 36px; margin-bottom: 24px;">
+            <span style="font-family: 'Courier New', Courier, monospace; font-size: 38px; font-weight: 800; letter-spacing: 12px; color: #7c3aed;">
+              ${otp}
+            </span>
+          </div>
+
+          <p style="margin: 0; font-size: 12px; color: #9ca3af;">
+            This 4-digit code expires in 10 minutes. If you did not request this, please ignore this email.
+          </p>
+        </div>
+
+        <!-- Footer -->
+        <div style="background: #f9fafb; padding: 16px 24px; text-align: center; font-size: 11px; color: #9ca3af; border-top: 1px solid #e5e7eb;">
+          Securing your personal productivity workspace.
+        </div>
+      </div>
+    </body>
+  </html>
+  `;
+}
+
+/** Send 4-digit OTP verification email */
+export async function sendOtpEmail(email: string, otp: string): Promise<boolean> {
+  if (!resend || !process.env.RESEND_API_KEY || process.env.RESEND_API_KEY.includes("placeholder")) {
+    console.warn("Resend API key not configured. Skipping OTP email.");
+    return false;
+  }
+
+  try {
+    const html = generateOtpEmailHtml(otp);
+    await resend.emails.send({
+      from: FROM_EMAIL,
+      to: email,
+      subject: `🔐 Your Planify 4-Digit Verification Code: ${otp}`,
+      html,
+    });
+    console.log(`4-digit verification OTP sent to ${email}`);
+    return true;
+  } catch (err) {
+    console.error("Failed to send OTP email:", err);
     return false;
   }
 }

@@ -4,11 +4,15 @@ import React, { useState, useEffect } from "react";
 import { usePathname } from "next/navigation";
 import { Sidebar } from "./sidebar";
 import { MobileNav } from "./mobile-nav";
+import { useRealtime } from "@/hooks/use-realtime";
 import { cn } from "@/lib/utils";
 
 export function AppShell({ children }: { children: React.ReactNode }) {
   const [collapsed, setCollapsed] = useState(false);
   const pathname = usePathname();
+
+  // Connect Supabase Realtime synchronization
+  useRealtime();
 
   // Load saved collapse state
   useEffect(() => {

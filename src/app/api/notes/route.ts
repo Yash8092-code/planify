@@ -1,32 +1,26 @@
 import { NextResponse } from "next/server";
-import { createServerClient } from "@/lib/supabase/server";
+import { createAdminClient, getAuthenticatedUser } from "@/lib/supabase/server";
 
-// GET /api/notes — Fetch notes with search, sort, and pinned priority
+// GET /api/notes — Fetch notes with search, sort, and pinned priority for authenticated user
 export async function GET(request: Request) {
   try {
+    const user = await getAuthenticatedUser();
+    if (!user) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
     const { searchParams } = new URL(request.url);
     const query = searchParams.get("q")?.trim();
     const tag = searchParams.get("tag")?.trim();
     const sort = searchParams.get("sort") || "recent"; // 'recent' | 'alphabetical'
 
-    const supabase = createServerClient();
+    const admin = createAdminClient();
 
-    // 1. Get user profile
-    const { data: profile, error: profileError } = await supabase
-      .from("profiles")
-      .select("id")
-      .limit(1)
-      .single();
-
-    if (profileError || !profile) {
-      return NextResponse.json({ error: "Profile not found" }, { status: 404 });
-    }
-
-    // 2. Query notes
-    let dbQuery = supabase
+    // Query notes strictly for this user
+    let dbQuery = admin
       .from("notes")
-      .select("*")
-      .eq("profile_id", profile.id);
+      .select("id, profile_id, title, content, tags, is_pinned, created_at, updated_at")
+      .eq("profile_id", user.id);
 
     if (sort === "alphabetical") {
       dbQuery = dbQuery
@@ -71,9 +65,14 @@ export async function GET(request: Request) {
   }
 }
 
-// POST /api/notes — Create a note
+// POST /api/notes — Create a note for authenticated user
 export async function POST(request: Request) {
   try {
+    const user = await getAuthenticatedUser();
+    if (!user) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
     const body = await request.json();
     const { title, content = "", tags = [] } = body;
 
@@ -81,26 +80,16 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Note title is required" }, { status: 400 });
     }
 
-    const supabase = createServerClient();
-
-    const { data: profile, error: profileError } = await supabase
-      .from("profiles")
-      .select("id")
-      .limit(1)
-      .single();
-
-    if (profileError || !profile) {
-      return NextResponse.json({ error: "Profile not found" }, { status: 404 });
-    }
+    const admin = createAdminClient();
 
     const cleanTags = Array.isArray(tags)
       ? tags.map((t: string) => t.trim().toLowerCase()).filter(Boolean)
       : [];
 
-    const { data: note, error } = await supabase
+    const { data: note, error } = await admin
       .from("notes")
       .insert({
-        profile_id: profile.id,
+        profile_id: user.id,
         title: title.trim(),
         content: content || "",
         tags: cleanTags,
@@ -120,9 +109,14 @@ export async function POST(request: Request) {
   }
 }
 
-// PATCH /api/notes — Update note (content, title, tags, pin)
+// PATCH /api/notes — Update note belonging to authenticated user
 export async function PATCH(request: Request) {
   try {
+    const user = await getAuthenticatedUser();
+    if (!user) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
     const body = await request.json();
     const { id, title, content, tags, is_pinned } = body;
 
@@ -130,7 +124,19 @@ export async function PATCH(request: Request) {
       return NextResponse.json({ error: "Note ID is required" }, { status: 400 });
     }
 
-    const supabase = createServerClient();
+    const admin = createAdminClient();
+
+    // Verify ownership
+    const { data: existing } = await admin
+      .from("notes")
+      .select("id")
+      .eq("id", id)
+      .eq("profile_id", user.id)
+      .maybeSingle();
+
+    if (!existing) {
+      return NextResponse.json({ error: "Note not found or access denied" }, { status: 404 });
+    }
 
     const updates: Record<string, unknown> = {
       updated_at: new Date().toISOString(),
@@ -157,10 +163,11 @@ export async function PATCH(request: Request) {
       updates.is_pinned = Boolean(is_pinned);
     }
 
-    const { data: note, error } = await supabase
+    const { data: note, error } = await admin
       .from("notes")
       .update(updates)
       .eq("id", id)
+      .eq("profile_id", user.id)
       .select()
       .single();
 
@@ -175,9 +182,14 @@ export async function PATCH(request: Request) {
   }
 }
 
-// DELETE /api/notes — Delete a note
+// DELETE /api/notes — Delete note belonging to authenticated user
 export async function DELETE(request: Request) {
   try {
+    const user = await getAuthenticatedUser();
+    if (!user) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
     const { searchParams } = new URL(request.url);
     const id = searchParams.get("id");
 
@@ -185,9 +197,13 @@ export async function DELETE(request: Request) {
       return NextResponse.json({ error: "Note ID is required" }, { status: 400 });
     }
 
-    const supabase = createServerClient();
+    const admin = createAdminClient();
 
-    const { error } = await supabase.from("notes").delete().eq("id", id);
+    const { error } = await admin
+      .from("notes")
+      .delete()
+      .eq("id", id)
+      .eq("profile_id", user.id);
 
     if (error) {
       return NextResponse.json({ error: error.message }, { status: 500 });

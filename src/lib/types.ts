@@ -73,6 +73,8 @@ export interface NotificationLog {
   notification_type: "morning_email" | "completion_email";
   notification_date: string; // YYYY-MM-DD
   sent_at: string;
+  status?: "sent" | "failed";
+  error_message?: string | null;
 }
 
 // --- Form/Input Types ---

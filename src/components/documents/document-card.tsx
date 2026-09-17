@@ -76,6 +76,9 @@ export function DocumentCard({
     year: "numeric",
   });
 
+  const viewUrl = `/api/documents/${doc.id}/view`;
+  const downloadUrl = `/api/documents/${doc.id}/view?download=1`;
+
   return (
     <>
       <motion.div
@@ -95,7 +98,7 @@ export function DocumentCard({
             <h4
               className="text-sm font-semibold truncate text-foreground group-hover:text-primary transition-colors cursor-pointer"
               title={doc.file_name}
-              onClick={() => window.open(doc.file_url, "_blank")}
+              onClick={() => window.open(viewUrl, "_blank")}
             >
               {doc.file_name}
             </h4>
@@ -113,8 +116,8 @@ export function DocumentCard({
             variant="ghost"
             size="icon"
             className="h-8 w-8 text-muted-foreground hover:text-foreground"
-            onClick={() => window.open(doc.file_url, "_blank")}
-            title="Download / Open"
+            onClick={() => window.open(downloadUrl, "_blank")}
+            title="Download"
           >
             <Download className="h-4 w-4" />
           </Button>
@@ -130,9 +133,13 @@ export function DocumentCard({
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" className="w-36">
-              <DropdownMenuItem onClick={() => window.open(doc.file_url, "_blank")}>
+              <DropdownMenuItem onClick={() => window.open(viewUrl, "_blank")}>
                 <ExternalLink className="mr-2 h-3.5 w-3.5" />
                 Open File
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => window.open(downloadUrl, "_blank")}>
+                <Download className="mr-2 h-3.5 w-3.5" />
+                Download
               </DropdownMenuItem>
               <DropdownMenuItem onClick={() => setIsRenameOpen(true)}>
                 <Pencil className="mr-2 h-3.5 w-3.5" />

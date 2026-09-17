@@ -26,7 +26,7 @@ import { TaskFormDialog } from "@/components/checklist/task-form";
 import { RollbackManagerDialog } from "@/components/checklist/rollback-manager";
 import { useProfile } from "@/hooks/use-profile";
 import { useTasks } from "@/hooks/use-tasks";
-import { getGreeting, formatDisplayDate, getDailyQuote, formatDueTime } from "@/lib/utils";
+import { getGreeting, formatDisplayDate, getDailyQuote, formatDueTime, formatDateKey } from "@/lib/utils";
 import { CreateTaskInput } from "@/lib/types";
 
 export default function DashboardPage() {
@@ -67,7 +67,7 @@ export default function DashboardPage() {
   const dateStr = formatDisplayDate();
   const quote = getDailyQuote();
 
-  const todayString = new Date().toISOString().split("T")[0];
+  const todayString = formatDateKey();
 
   return (
     <div className="space-y-8">

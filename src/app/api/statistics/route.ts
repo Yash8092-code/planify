@@ -1,10 +1,10 @@
 import { NextResponse } from "next/server";
-import { createServerClient } from "@/lib/supabase/server";
+import { createAdminClient, getAuthenticatedUser } from "@/lib/supabase/server";
 
-function getTodayDateString(timezone = "UTC"): string {
+function getTodayDateString(timezone = "Asia/Kolkata"): string {
   try {
     const formatter = new Intl.DateTimeFormat("en-CA", {
-      timeZone: timezone,
+      timeZone: timezone || "Asia/Kolkata",
       year: "numeric",
       month: "2-digit",
       day: "2-digit",
@@ -17,52 +17,66 @@ function getTodayDateString(timezone = "UTC"): string {
 
 export async function GET() {
   try {
-    const supabase = createServerClient();
+    const user = await getAuthenticatedUser();
+    if (!user) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
 
-    const { data: profile, error: pError } = await supabase
+    const admin = createAdminClient();
+
+    const { data: profile, error: pError } = await admin
       .from("profiles")
       .select("id, timezone")
-      .limit(1)
-      .single();
+      .eq("id", user.id)
+      .maybeSingle();
 
     if (pError || !profile) {
       return NextResponse.json({ error: "Profile not found" }, { status: 404 });
     }
 
-    const todayStr = getTodayDateString(profile.timezone);
+    const timezone = profile.timezone || "Asia/Kolkata";
+    const todayStr = getTodayDateString(timezone);
 
-    // 1. Fetch all tasks for profile to compute all-time and historical stats
-    const { data: allTasks, error: tError } = await supabase
-      .from("tasks")
-      .select("id, completed, task_date, created_at, priority")
-      .eq("profile_id", profile.id);
+    // Calculate dates
+    const thirtyDaysAgo = new Date();
+    thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+    const thirtyDaysKey = thirtyDaysAgo.toISOString().split("T")[0];
 
-    if (tError) {
-      return NextResponse.json({ error: tError.message }, { status: 500 });
-    }
+    // Parallel optimized queries:
+    // 1. Recent 30 days tasks (for charts, monthly rate, and recent streak)
+    // 2. All-time completed tasks count
+    // 3. Active recurring tasks count
+    const [recentTasksRes, allTimeCountRes, recurringRes] = await Promise.all([
+      admin
+        .from("tasks")
+        .select("id, completed, task_date, priority")
+        .eq("profile_id", user.id)
+        .gte("task_date", thirtyDaysKey)
+        .order("task_date", { ascending: false }),
+      admin
+        .from("tasks")
+        .select("id", { count: "exact", head: true })
+        .eq("profile_id", user.id)
+        .eq("completed", true),
+      admin
+        .from("recurring_tasks")
+        .select("id", { count: "exact", head: true })
+        .eq("profile_id", user.id)
+        .eq("active", true),
+    ]);
 
-    const tasks = allTasks || [];
+    const recentTasks = recentTasksRes.data || [];
+    const totalCompleted = allTimeCountRes.count ?? 0;
+    const activeRecurringCount = recurringRes.count ?? 0;
 
-    // 2. Active recurring tasks count
-    const { data: recurringTasks } = await supabase
-      .from("recurring_tasks")
-      .select("id")
-      .eq("profile_id", profile.id)
-      .eq("active", true);
-
-    const activeRecurringCount = recurringTasks?.length || 0;
-
-    // 3. Today's stats
-    const todayTasks = tasks.filter((t) => t.task_date === todayStr);
+    // 1. Today's stats
+    const todayTasks = recentTasks.filter((t) => t.task_date === todayStr);
     const todayTotal = todayTasks.length;
     const todayCompleted = todayTasks.filter((t) => t.completed).length;
     const todayRemaining = todayTotal - todayCompleted;
     const todayPercentage = todayTotal > 0 ? Math.round((todayCompleted / todayTotal) * 100) : 0;
 
-    // 4. All-time completed tasks
-    const totalCompleted = tasks.filter((t) => t.completed).length;
-
-    // 5. Last 7 days breakdown
+    // 2. Last 7 days breakdown
     const last7Days: {
       day: string;
       date: string;
@@ -78,7 +92,7 @@ export async function GET() {
       const dateKey = d.toISOString().split("T")[0];
       const dayName = d.toLocaleDateString("en-US", { weekday: "short" });
 
-      const dayTasks = tasks.filter((t) => t.task_date === dateKey);
+      const dayTasks = recentTasks.filter((t) => t.task_date === dateKey);
       const total = dayTasks.length;
       const completed = dayTasks.filter((t) => t.completed).length;
       const rate = total > 0 ? Math.round((completed / total) * 100) : 0;
@@ -97,25 +111,19 @@ export async function GET() {
     const weekCompleted = last7Days.reduce((acc, d) => acc + d.completed, 0);
     const weeklyRate = weekTotal > 0 ? Math.round((weekCompleted / weekTotal) * 100) : 0;
 
-    // 6. Last 30 days monthly rate
-    const thirtyDaysAgo = new Date();
-    thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
-    const thirtyDaysKey = thirtyDaysAgo.toISOString().split("T")[0];
-
-    const monthTasks = tasks.filter((t) => t.task_date >= thirtyDaysKey);
-    const monthTotal = monthTasks.length;
-    const monthCompleted = monthTasks.filter((t) => t.completed).length;
+    // 3. Last 30 days monthly rate
+    const monthTotal = recentTasks.length;
+    const monthCompleted = recentTasks.filter((t) => t.completed).length;
     const monthlyRate = monthTotal > 0 ? Math.round((monthCompleted / monthTotal) * 100) : 0;
 
-    // 7. Calculate Streak (consecutive days leading up to today/yesterday with >= 1 task completed)
+    // 4. Calculate Streak
     const datesWithCompletion = new Set(
-      tasks.filter((t) => t.completed).map((t) => t.task_date)
+      recentTasks.filter((t) => t.completed).map((t) => t.task_date)
     );
 
     let streak = 0;
-    let checkDate = new Date();
+    const checkDate = new Date();
 
-    // If today has completions, count today; otherwise start from yesterday
     const todayHasCompletion = datesWithCompletion.has(todayStr);
     if (!todayHasCompletion) {
       checkDate.setDate(checkDate.getDate() - 1);

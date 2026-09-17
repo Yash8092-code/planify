@@ -32,10 +32,11 @@ import { TaskFormDialog } from "@/components/checklist/task-form";
 import { RollbackManagerDialog } from "@/components/checklist/rollback-manager";
 import { useTasks } from "@/hooks/use-tasks";
 import { Task, TaskFilter, CreateTaskInput } from "@/lib/types";
+import { formatDateKey } from "@/lib/utils";
 
-// Helper to get formatted date
+// Helper to get formatted date in local timezone
 function getTodayString(): string {
-  return new Date().toISOString().split("T")[0];
+  return formatDateKey();
 }
 
 function formatDateDisplay(dateStr: string): string {
@@ -84,13 +85,13 @@ export default function ChecklistPage() {
   const handlePrevDay = () => {
     const [y, m, d] = selectedDate.split("-").map(Number);
     const prev = new Date(y, m - 1, d - 1);
-    setSelectedDate(prev.toISOString().split("T")[0]);
+    setSelectedDate(formatDateKey(prev));
   };
 
   const handleNextDay = () => {
     const [y, m, d] = selectedDate.split("-").map(Number);
     const next = new Date(y, m - 1, d + 1);
-    setSelectedDate(next.toISOString().split("T")[0]);
+    setSelectedDate(formatDateKey(next));
   };
 
   const handleGoToday = () => {

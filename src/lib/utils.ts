@@ -116,12 +116,13 @@ export function getDailyQuote(): string {
   return QUOTES[dayOfYear % QUOTES.length];
 }
 
-/** Detect user timezone */
+/** Detect user timezone, defaulting to Asia/Kolkata */
 export function detectTimezone(): string {
   try {
-    return Intl.DateTimeFormat().resolvedOptions().timeZone;
+    const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
+    return tz || "Asia/Kolkata";
   } catch {
-    return "UTC";
+    return "Asia/Kolkata";
   }
 }
 

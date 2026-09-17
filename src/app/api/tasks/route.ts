@@ -1,11 +1,12 @@
 import { NextResponse } from "next/server";
-import { createServerClient } from "@/lib/supabase/server";
+import { createAdminClient, getAuthenticatedUser } from "@/lib/supabase/server";
+import { sendCompletionEmail } from "@/lib/email";
 
-// Helper to get today's date formatted as YYYY-MM-DD
-function getTodayDateString(timezone = "UTC"): string {
+// Helper to get today's date formatted as YYYY-MM-DD in user's timezone
+function getTodayDateString(timezone = "Asia/Kolkata"): string {
   try {
     const formatter = new Intl.DateTimeFormat("en-CA", {
-      timeZone: timezone,
+      timeZone: timezone || "Asia/Kolkata",
       year: "numeric",
       month: "2-digit",
       day: "2-digit",
@@ -16,43 +17,50 @@ function getTodayDateString(timezone = "UTC"): string {
   }
 }
 
-// GET /api/tasks — Fetch tasks with filtering & stats
+// GET /api/tasks — Fetch tasks with filtering & stats for authenticated user
 export async function GET(request: Request) {
   try {
+    const user = await getAuthenticatedUser();
+    if (!user) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
     const { searchParams } = new URL(request.url);
     const dateParam = searchParams.get("date");
     const filter = searchParams.get("filter") || "all"; // 'all' | 'active' | 'completed'
     const priority = searchParams.get("priority"); // 'low' | 'medium' | 'high'
 
-    const supabase = createServerClient();
+    const admin = createAdminClient();
 
     // 1. Get user profile
-    const { data: profile, error: profileError } = await supabase
+    const { data: profile, error: profileError } = await admin
       .from("profiles")
       .select("id, timezone")
-      .limit(1)
-      .single();
+      .eq("id", user.id)
+      .maybeSingle();
 
     if (profileError || !profile) {
       return NextResponse.json({ error: "Profile not found" }, { status: 404 });
     }
 
-    const taskDate = dateParam || getTodayDateString(profile.timezone);
+    const timezone = profile.timezone || "Asia/Kolkata";
+    const todayDate = getTodayDateString(timezone);
+    const taskDate = dateParam || todayDate;
 
     // 2. Daily rollback auto-check: If querying today's tasks, ensure active recurring tasks exist
-    if (taskDate === getTodayDateString(profile.timezone)) {
-      const { data: activeRecurring } = await supabase
+    if (taskDate === todayDate) {
+      const { data: activeRecurring } = await admin
         .from("recurring_tasks")
         .select("*")
-        .eq("profile_id", profile.id)
+        .eq("profile_id", user.id)
         .eq("active", true);
 
       if (activeRecurring && activeRecurring.length > 0) {
         // Fetch tasks already created for today
-        const { data: existingToday } = await supabase
+        const { data: existingToday } = await admin
           .from("tasks")
           .select("recurring_task_id")
-          .eq("profile_id", profile.id)
+          .eq("profile_id", user.id)
           .eq("task_date", taskDate);
 
         const existingRecurringIds = new Set(
@@ -64,7 +72,7 @@ export async function GET(request: Request) {
         const toInsert = activeRecurring
           .filter((rec) => !existingRecurringIds.has(rec.id))
           .map((rec, index) => ({
-            profile_id: profile.id,
+            profile_id: user.id,
             title: rec.title,
             description: rec.description,
             priority: rec.priority,
@@ -77,16 +85,16 @@ export async function GET(request: Request) {
           }));
 
         if (toInsert.length > 0) {
-          await supabase.from("tasks").insert(toInsert);
+          await admin.from("tasks").insert(toInsert);
         }
       }
     }
 
     // 3. Query all tasks for this date to compute accurate stats
-    const { data: allDayTasks, error: dayError } = await supabase
+    const { data: allDayTasks, error: dayError } = await admin
       .from("tasks")
       .select("*")
-      .eq("profile_id", profile.id)
+      .eq("profile_id", user.id)
       .eq("task_date", taskDate)
       .order("sort_order", { ascending: true })
       .order("created_at", { ascending: true });
@@ -103,7 +111,7 @@ export async function GET(request: Request) {
 
     const stats = { total, completed, remaining, percentage };
 
-    // 4. Apply client-requested filters to returned data
+    // 4. Apply client-requested filters
     let filteredTasks = tasksList;
     if (filter === "active") {
       filteredTasks = filteredTasks.filter((t) => !t.completed);
@@ -126,9 +134,14 @@ export async function GET(request: Request) {
   }
 }
 
-// POST /api/tasks — Create a new task
+// POST /api/tasks — Create a new task for authenticated user
 export async function POST(request: Request) {
   try {
+    const user = await getAuthenticatedUser();
+    if (!user) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
     const body = await request.json();
     const {
       title,
@@ -143,26 +156,23 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Task title is required" }, { status: 400 });
     }
 
-    const supabase = createServerClient();
+    const admin = createAdminClient();
 
-    // 1. Get user profile
-    const { data: profile, error: profileError } = await supabase
+    // 1. Get user profile for timezone
+    const { data: profile } = await admin
       .from("profiles")
-      .select("id, timezone")
-      .limit(1)
-      .single();
+      .select("timezone")
+      .eq("id", user.id)
+      .maybeSingle();
 
-    if (profileError || !profile) {
-      return NextResponse.json({ error: "Profile not found" }, { status: 404 });
-    }
-
-    const dateToUse = task_date || getTodayDateString(profile.timezone);
+    const timezone = profile?.timezone || "Asia/Kolkata";
+    const dateToUse = task_date || getTodayDateString(timezone);
 
     // 2. Get current max sort_order
-    const { data: maxSortData } = await supabase
+    const { data: maxSortData } = await admin
       .from("tasks")
       .select("sort_order")
-      .eq("profile_id", profile.id)
+      .eq("profile_id", user.id)
       .eq("task_date", dateToUse)
       .order("sort_order", { ascending: false })
       .limit(1);
@@ -174,12 +184,12 @@ export async function POST(request: Request) {
 
     let recurringTaskId: string | null = null;
 
-    // 3. If rollback_daily is true, create or get a recurring_task entry
+    // 3. If rollback_daily is true, create recurring_task entry
     if (rollback_daily) {
-      const { data: recTask, error: recError } = await supabase
+      const { data: recTask, error: recError } = await admin
         .from("recurring_tasks")
         .insert({
-          profile_id: profile.id,
+          profile_id: user.id,
           title: title.trim(),
           description: description ? description.trim() : null,
           priority,
@@ -195,10 +205,10 @@ export async function POST(request: Request) {
     }
 
     // 4. Insert task
-    const { data: newTask, error: insertError } = await supabase
+    const { data: newTask, error: insertError } = await admin
       .from("tasks")
       .insert({
-        profile_id: profile.id,
+        profile_id: user.id,
         title: title.trim(),
         description: description ? description.trim() : null,
         priority,
@@ -223,9 +233,14 @@ export async function POST(request: Request) {
   }
 }
 
-// PATCH /api/tasks — Update a task
+// PATCH /api/tasks — Update a task and trigger completion celebrations safely
 export async function PATCH(request: Request) {
   try {
+    const user = await getAuthenticatedUser();
+    if (!user) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
     const body = await request.json();
     const { id, completed, title, description, priority, due_time, rollback_daily } = body;
 
@@ -233,22 +248,25 @@ export async function PATCH(request: Request) {
       return NextResponse.json({ error: "Task ID is required" }, { status: 400 });
     }
 
-    const supabase = createServerClient();
+    const admin = createAdminClient();
 
-    // Fetch existing task
-    const { data: existing, error: fetchError } = await supabase
+    // Fetch existing task ensuring ownership
+    const { data: existing, error: fetchError } = await admin
       .from("tasks")
       .select("*")
       .eq("id", id)
-      .single();
+      .eq("profile_id", user.id)
+      .maybeSingle();
 
     if (fetchError || !existing) {
-      return NextResponse.json({ error: "Task not found" }, { status: 404 });
+      return NextResponse.json({ error: "Task not found or access denied" }, { status: 404 });
     }
 
     const updates: Record<string, unknown> = {
       updated_at: new Date().toISOString(),
     };
+
+    const isMarkingCompleted = completed !== undefined && Boolean(completed) && !existing.completed;
 
     if (completed !== undefined) {
       updates.completed = Boolean(completed);
@@ -266,10 +284,8 @@ export async function PATCH(request: Request) {
       updates.description = description ? description.trim() : null;
     }
 
-    if (priority !== undefined) {
-      if (["low", "medium", "high"].includes(priority)) {
-        updates.priority = priority;
-      }
+    if (priority !== undefined && ["low", "medium", "high"].includes(priority)) {
+      updates.priority = priority;
     }
 
     if (due_time !== undefined) {
@@ -281,12 +297,11 @@ export async function PATCH(request: Request) {
       updates.rollback_daily = Boolean(rollback_daily);
 
       if (rollback_daily) {
-        // Create recurring task if not linked
         if (!existing.recurring_task_id) {
-          const { data: newRec } = await supabase
+          const { data: newRec } = await admin
             .from("recurring_tasks")
             .insert({
-              profile_id: existing.profile_id,
+              profile_id: user.id,
               title: updates.title || existing.title,
               description: updates.description !== undefined ? updates.description : existing.description,
               priority: updates.priority || existing.priority,
@@ -300,30 +315,83 @@ export async function PATCH(request: Request) {
             updates.recurring_task_id = newRec.id;
           }
         } else {
-          // Reactivate existing recurring task
-          await supabase
+          await admin
             .from("recurring_tasks")
             .update({ active: true })
-            .eq("id", existing.recurring_task_id);
+            .eq("id", existing.recurring_task_id)
+            .eq("profile_id", user.id);
         }
       } else if (existing.recurring_task_id) {
-        // Deactivate recurring task
-        await supabase
+        await admin
           .from("recurring_tasks")
           .update({ active: false })
-          .eq("id", existing.recurring_task_id);
+          .eq("id", existing.recurring_task_id)
+          .eq("profile_id", user.id);
       }
     }
 
-    const { data: updatedTask, error: updateError } = await supabase
+    // Update the task
+    const { data: updatedTask, error: updateError } = await admin
       .from("tasks")
       .update(updates)
       .eq("id", id)
+      .eq("profile_id", user.id)
       .select()
       .single();
 
     if (updateError) {
       return NextResponse.json({ error: updateError.message }, { status: 500 });
+    }
+
+    // COMPLETION EMAIL DETECTION (Non-blocking & idempotent)
+    if (isMarkingCompleted) {
+      (async () => {
+        try {
+          const taskDate = existing.task_date;
+
+          // 1. Fetch all tasks for this date
+          const { data: dayTasks } = await admin
+            .from("tasks")
+            .select("*")
+            .eq("profile_id", user.id)
+            .eq("task_date", taskDate);
+
+          if (dayTasks && dayTasks.length > 0 && dayTasks.every((t) => t.completed)) {
+            // 2. Check if completion email was already sent today
+            const { data: existingLog } = await admin
+              .from("notification_logs")
+              .select("id")
+              .eq("profile_id", user.id)
+              .eq("notification_type", "completion_email")
+              .eq("notification_date", taskDate)
+              .maybeSingle();
+
+            if (!existingLog) {
+              // 3. Fetch profile
+              const { data: prof } = await admin
+                .from("profiles")
+                .select("*")
+                .eq("id", user.id)
+                .maybeSingle();
+
+              if (prof && prof.email_notifications) {
+                const sent = await sendCompletionEmail(prof, dayTasks);
+                if (sent) {
+                  await admin.from("notification_logs").insert({
+                    profile_id: user.id,
+                    notification_type: "completion_email",
+                    notification_date: taskDate,
+                    sent_at: new Date().toISOString(),
+                  });
+                  console.log(`Celebration completion email sent to ${prof.email} for ${taskDate}`);
+                }
+              }
+            }
+          }
+        } catch (emailErr) {
+          console.error("Background completion email check error:", emailErr);
+        }
+      })();
     }
 
     return NextResponse.json({ data: updatedTask });
@@ -333,9 +401,14 @@ export async function PATCH(request: Request) {
   }
 }
 
-// DELETE /api/tasks — Delete a task
+// DELETE /api/tasks — Delete a task belonging to authenticated user
 export async function DELETE(request: Request) {
   try {
+    const user = await getAuthenticatedUser();
+    if (!user) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
     const { searchParams } = new URL(request.url);
     const id = searchParams.get("id");
     const deleteRecurring = searchParams.get("delete_recurring") === "true";
@@ -344,23 +417,33 @@ export async function DELETE(request: Request) {
       return NextResponse.json({ error: "Task ID is required" }, { status: 400 });
     }
 
-    const supabase = createServerClient();
+    const admin = createAdminClient();
 
-    // Get task before deleting to check recurring_task_id
-    const { data: task } = await supabase
+    // Verify task ownership
+    const { data: task } = await admin
       .from("tasks")
       .select("recurring_task_id")
       .eq("id", id)
-      .single();
+      .eq("profile_id", user.id)
+      .maybeSingle();
 
-    if (task && deleteRecurring && task.recurring_task_id) {
-      await supabase
-        .from("recurring_tasks")
-        .delete()
-        .eq("id", task.recurring_task_id);
+    if (!task) {
+      return NextResponse.json({ error: "Task not found or access denied" }, { status: 404 });
     }
 
-    const { error } = await supabase.from("tasks").delete().eq("id", id);
+    if (deleteRecurring && task.recurring_task_id) {
+      await admin
+        .from("recurring_tasks")
+        .delete()
+        .eq("id", task.recurring_task_id)
+        .eq("profile_id", user.id);
+    }
+
+    const { error } = await admin
+      .from("tasks")
+      .delete()
+      .eq("id", id)
+      .eq("profile_id", user.id);
 
     if (error) {
       return NextResponse.json({ error: error.message }, { status: 500 });

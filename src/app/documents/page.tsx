@@ -41,9 +41,13 @@ export default function DocumentsPage() {
   const queryParams = new URLSearchParams();
   if (sortOrder) queryParams.set("sort", sortOrder);
 
-  const { data: documents, error, isLoading, mutate } = useSWR<DocumentType[]>(
+  const { data: documents, error, isLoading, mutate, isValidating } = useSWR<DocumentType[]>(
     `/api/documents?${queryParams.toString()}`,
-    fetcher
+    fetcher,
+    {
+      revalidateOnFocus: true,
+      dedupingInterval: 5000,
+    }
   );
 
   const filteredDocs = useMemo(() => {
@@ -84,21 +88,54 @@ export default function DocumentsPage() {
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
-          <h1 className="text-2xl md:text-3xl font-bold tracking-tight">Documents</h1>
+          <div className="flex items-center gap-2.5">
+            <h1 className="text-2xl md:text-3xl font-bold tracking-tight">Documents</h1>
+            {documents && documents.length > 0 && (
+              <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-primary/10 text-primary border border-primary/20">
+                {documents.length} {documents.length === 1 ? "file" : "files"}
+              </span>
+            )}
+          </div>
           <p className="text-sm text-muted-foreground mt-0.5">
             Store, view, and organize your files, contracts, and receipts
           </p>
         </div>
 
-        <Button
-          size="sm"
-          onClick={() => setShowUploadZone(!showUploadZone)}
-          className="gap-1.5 h-9 text-xs shadow-xs self-start sm:self-auto"
-        >
-          <Upload className="h-4 w-4" />
-          {showUploadZone ? "Hide Uploader" : "Upload File"}
-        </Button>
+        <div className="flex items-center gap-2 self-start sm:self-auto">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => mutate()}
+            disabled={isValidating}
+            className="gap-1.5 h-9 text-xs"
+            title="Refresh document list"
+          >
+            <FolderOpen className={`h-3.5 w-3.5 ${isValidating ? "animate-spin" : ""}`} />
+            Refresh
+          </Button>
+
+          <Button
+            size="sm"
+            onClick={() => setShowUploadZone(!showUploadZone)}
+            className="gap-1.5 h-9 text-xs shadow-xs"
+          >
+            <Upload className="h-4 w-4" />
+            {showUploadZone ? "Hide Uploader" : "Upload File"}
+          </Button>
+        </div>
       </div>
+
+      {/* Error state if SWR fails */}
+      {error && (
+        <div className="p-4 rounded-xl border border-destructive/20 bg-destructive/5 flex items-center justify-between">
+          <p className="text-sm text-destructive font-medium">
+            Unable to load documents: {error.message}
+          </p>
+          <Button size="sm" variant="outline" onClick={() => mutate()} className="h-8 text-xs">
+            Try Again
+          </Button>
+        </div>
+      )}
 
       {/* Upload Dropzone (Collapsible or always available when toggled) */}
       {showUploadZone && (
