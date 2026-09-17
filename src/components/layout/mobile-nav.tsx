@@ -8,6 +8,7 @@ import {
   CheckSquare,
   StickyNote,
   FolderOpen,
+  BarChart3,
   Settings,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -17,6 +18,7 @@ const NAV_ITEMS = [
   { href: "/checklist", label: "Tasks", icon: CheckSquare },
   { href: "/notes", label: "Notes", icon: StickyNote },
   { href: "/documents", label: "Docs", icon: FolderOpen },
+  { href: "/statistics", label: "Stats", icon: BarChart3 },
   { href: "/settings", label: "Settings", icon: Settings },
 ];
 
@@ -25,7 +27,7 @@ export function MobileNav() {
 
   return (
     <nav className="md:hidden fixed bottom-0 left-0 right-0 z-50 glass-strong border-t border-border">
-      <div className="flex items-center justify-around h-16 px-2 safe-area-bottom">
+      <div className="flex items-center justify-between h-16 px-1 safe-area-bottom">
         {NAV_ITEMS.map((item) => {
           const isActive = pathname === item.href || pathname.startsWith(item.href + "/");
           return (
@@ -33,7 +35,7 @@ export function MobileNav() {
               key={item.href}
               href={item.href}
               className={cn(
-                "flex flex-col items-center justify-center gap-1 py-1 px-3 rounded-xl transition-all duration-200 min-w-[56px]",
+                "flex flex-col items-center justify-center gap-1 py-1 px-1 rounded-xl transition-all duration-200 flex-1 min-w-[44px]",
                 isActive
                   ? "text-primary"
                   : "text-muted-foreground active:text-foreground"

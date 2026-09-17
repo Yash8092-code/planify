@@ -72,7 +72,7 @@ export default function StatisticsPage() {
       ) : (
         <div className="space-y-8">
           {/* Key KPI Cards Grid */}
-          <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
             {/* Streak */}
             <motion.div
               initial={{ opacity: 0, y: 10 }}
@@ -80,24 +80,24 @@ export default function StatisticsPage() {
               transition={{ duration: 0.3 }}
             >
               <Card className="border-border bg-card shadow-xs hover:border-amber-500/40 transition-colors">
-                <CardContent className="p-5">
+                <CardContent className="p-4 sm:p-5">
                   <div className="flex items-center justify-between">
-                    <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+                    <span className="text-[11px] sm:text-xs font-semibold text-muted-foreground uppercase tracking-wider">
                       Current Streak
                     </span>
-                    <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-amber-500/10 text-amber-500">
-                      <Flame className="h-4 w-4 fill-amber-500" />
+                    <div className="flex h-7 w-7 sm:h-8 sm:w-8 items-center justify-center rounded-lg bg-amber-500/10 text-amber-500">
+                      <Flame className="h-3.5 w-3.5 sm:h-4 sm:w-4 fill-amber-500" />
                     </div>
                   </div>
-                  <div className="mt-3">
-                    <span className="text-3xl font-extrabold text-foreground">
+                  <div className="mt-2.5 sm:mt-3">
+                    <span className="text-2xl sm:text-3xl font-extrabold text-foreground">
                       {stats.streak}
                     </span>
                     <span className="text-xs text-muted-foreground ml-1.5 font-medium">
                       {stats.streak === 1 ? "day" : "days"}
                     </span>
                   </div>
-                  <p className="text-[11px] text-muted-foreground mt-1">
+                  <p className="text-[10px] sm:text-[11px] text-muted-foreground mt-1">
                     {stats.streak > 0 ? "Keep the flame burning!" : "Complete a task today to ignite!"}
                   </p>
                 </CardContent>
@@ -111,24 +111,24 @@ export default function StatisticsPage() {
               transition={{ delay: 0.08, duration: 0.3 }}
             >
               <Card className="border-border bg-card shadow-xs hover:border-success/40 transition-colors">
-                <CardContent className="p-5">
+                <CardContent className="p-4 sm:p-5">
                   <div className="flex items-center justify-between">
-                    <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+                    <span className="text-[11px] sm:text-xs font-semibold text-muted-foreground uppercase tracking-wider">
                       Tasks Finished
                     </span>
-                    <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-success/10 text-success">
-                      <CheckCircle2 className="h-4 w-4" />
+                    <div className="flex h-7 w-7 sm:h-8 sm:w-8 items-center justify-center rounded-lg bg-success/10 text-success">
+                      <CheckCircle2 className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
                     </div>
                   </div>
-                  <div className="mt-3">
-                    <span className="text-3xl font-extrabold text-foreground">
+                  <div className="mt-2.5 sm:mt-3">
+                    <span className="text-2xl sm:text-3xl font-extrabold text-foreground">
                       {stats.totalCompleted}
                     </span>
                     <span className="text-xs text-muted-foreground ml-1.5 font-medium">
                       total
                     </span>
                   </div>
-                  <p className="text-[11px] text-muted-foreground mt-1">
+                  <p className="text-[10px] sm:text-[11px] text-muted-foreground mt-1">
                     All-time completed checklist items
                   </p>
                 </CardContent>
@@ -142,17 +142,17 @@ export default function StatisticsPage() {
               transition={{ delay: 0.16, duration: 0.3 }}
             >
               <Card className="border-border bg-card shadow-xs hover:border-primary/40 transition-colors">
-                <CardContent className="p-5">
+                <CardContent className="p-4 sm:p-5">
                   <div className="flex items-center justify-between">
-                    <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+                    <span className="text-[11px] sm:text-xs font-semibold text-muted-foreground uppercase tracking-wider">
                       7-Day Rate
                     </span>
-                    <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary/10 text-primary">
-                      <TrendingUp className="h-4 w-4" />
+                    <div className="flex h-7 w-7 sm:h-8 sm:w-8 items-center justify-center rounded-lg bg-primary/10 text-primary">
+                      <TrendingUp className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
                     </div>
                   </div>
-                  <div className="mt-3">
-                    <span className="text-3xl font-extrabold text-foreground">
+                  <div className="mt-2.5 sm:mt-3">
+                    <span className="text-2xl sm:text-3xl font-extrabold text-foreground">
                       {stats.weeklyRate}%
                     </span>
                   </div>
@@ -168,24 +168,24 @@ export default function StatisticsPage() {
               transition={{ delay: 0.24, duration: 0.3 }}
             >
               <Card className="border-border bg-card shadow-xs hover:border-violet-500/40 transition-colors">
-                <CardContent className="p-5">
+                <CardContent className="p-4 sm:p-5">
                   <div className="flex items-center justify-between">
-                    <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+                    <span className="text-[11px] sm:text-xs font-semibold text-muted-foreground uppercase tracking-wider">
                       Daily Habits
                     </span>
-                    <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-violet-500/10 text-violet-500">
-                      <RefreshCw className="h-4 w-4" />
+                    <div className="flex h-7 w-7 sm:h-8 sm:w-8 items-center justify-center rounded-lg bg-violet-500/10 text-violet-500">
+                      <RefreshCw className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
                     </div>
                   </div>
-                  <div className="mt-3">
-                    <span className="text-3xl font-extrabold text-foreground">
+                  <div className="mt-2.5 sm:mt-3">
+                    <span className="text-2xl sm:text-3xl font-extrabold text-foreground">
                       {stats.activeRecurring}
                     </span>
                     <span className="text-xs text-muted-foreground ml-1.5 font-medium">
                       habits
                     </span>
                   </div>
-                  <p className="text-[11px] text-muted-foreground mt-1">
+                  <p className="text-[10px] sm:text-[11px] text-muted-foreground mt-1">
                     Auto-recreated each morning at 5 AM
                   </p>
                 </CardContent>
@@ -199,20 +199,20 @@ export default function StatisticsPage() {
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.3, duration: 0.4 }}
           >
-            <Card className="border-border shadow-xs">
-              <CardHeader className="pb-4">
+            <Card className="border-border shadow-xs overflow-hidden">
+              <CardHeader className="pb-3 px-4 sm:px-6">
                 <div className="flex items-center justify-between">
-                  <CardTitle className="text-base font-semibold flex items-center gap-2">
+                  <CardTitle className="text-sm sm:text-base font-semibold flex items-center gap-2">
                     <Calendar className="h-4 w-4 text-primary" />
                     Last 7 Days Performance
                   </CardTitle>
-                  <span className="text-xs text-muted-foreground">
-                    Avg: {stats.weeklyRate}% completed
+                  <span className="text-[11px] sm:text-xs text-muted-foreground">
+                    Avg: {stats.weeklyRate}%
                   </span>
                 </div>
               </CardHeader>
-              <CardContent>
-                <div className="grid grid-cols-7 gap-2 sm:gap-4 items-end pt-6 pb-2 min-h-[190px]">
+              <CardContent className="px-2 sm:px-6">
+                <div className="grid grid-cols-7 gap-1 sm:gap-4 items-end pt-4 pb-2 min-h-[180px]">
                   {stats.weeklyChart.map((day, i) => {
                     const heightPercent = day.total > 0 ? Math.max(day.rate, 12) : 6;
                     return (

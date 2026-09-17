@@ -16,6 +16,7 @@ import {
   ArrowRight,
   Sparkles,
   CheckSquare,
+  BarChart3,
 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -113,12 +114,21 @@ export default function DashboardPage() {
               <TrendingUp className="h-5 w-5 text-primary" />
               Today&apos;s Productivity
             </CardTitle>
-            {stats.total > 0 && stats.percentage === 100 && (
-              <span className="flex items-center gap-1 text-xs font-semibold text-success bg-success/10 px-2.5 py-1 rounded-full">
-                <Sparkles className="h-3 w-3" />
-                All Done!
-              </span>
-            )}
+            <div className="flex items-center gap-2.5">
+              {stats.total > 0 && stats.percentage === 100 && (
+                <span className="flex items-center gap-1 text-xs font-semibold text-success bg-success/10 px-2.5 py-1 rounded-full">
+                  <Sparkles className="h-3 w-3" />
+                  All Done!
+                </span>
+              )}
+              <Link
+                href="/statistics"
+                className="text-xs text-primary font-medium hover:underline flex items-center gap-1 bg-primary/5 hover:bg-primary/10 px-2.5 py-1 rounded-lg transition-colors"
+              >
+                Analytics
+                <ArrowRight className="h-3 w-3" />
+              </Link>
+            </div>
           </CardHeader>
           <CardContent className="relative">
             <div className="flex flex-col sm:flex-row sm:items-center gap-6 mb-4">
@@ -197,7 +207,7 @@ export default function DashboardPage() {
         transition={{ delay: 0.25, duration: 0.4 }}
       >
         <h2 className="text-base font-semibold mb-3">Quick Actions</h2>
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
           <Button
             variant="outline"
             onClick={() => setIsTaskFormOpen(true)}
@@ -240,6 +250,17 @@ export default function DashboardPage() {
               <RefreshCw className="h-5 w-5" />
             </div>
             <span className="text-xs font-medium">Rollback Daily</span>
+          </Button>
+
+          <Button
+            variant="outline"
+            onClick={() => router.push("/statistics")}
+            className="h-auto flex flex-col items-center gap-2 py-5 px-4 rounded-xl border-border hover:border-primary/40 hover:bg-primary/5 transition-all group col-span-2 sm:col-span-1"
+          >
+            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary/10 group-hover:bg-primary/20 text-primary transition-colors">
+              <BarChart3 className="h-5 w-5" />
+            </div>
+            <span className="text-xs font-medium">Analytics</span>
           </Button>
         </div>
       </motion.div>
